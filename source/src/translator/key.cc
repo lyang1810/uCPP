@@ -143,6 +143,7 @@ keyword_t key[] = {
     { "_Else", UELSE },
     { "_Enable", ENABLE },
     { "_Event", EVENT },
+    { "_Finally", FINALLY },
     { "_Mutex", MUTEX },
     { "_Nomutex", NOMUTEX },
     { "_PeriodicTask", PTASK },

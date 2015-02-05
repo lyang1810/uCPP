@@ -1668,120 +1668,6 @@ typedef std::list<token_t *> tokenlist;
 static bool exception_declaration( attribute_t &attribute, bound_t &bound );
 static bool bound_exception_declaration( bound_t &bound );
 
-
-static bool resume_handler( symbol_t *symbol, int resume_clauses, token_t *&resume_any ) {
-    token_t *back = ahead;
-    token_t *befparn;
-    token_t *startE;
-    token_t *startH = NULL;
-    token_t *endH = NULL;
-    char temp_name[20];
-
-    // storing values inside a uHandler struct
-    befparn = ahead;
-    if ( match( LA ) ) {
-	sprintf( temp_name, "uHandler%d", resume_clauses );
-	startE = ahead;
-	token_t *dot = NULL;
-	bool dotdotdot = match( DOT_DOT_DOT );
-	if ( ! dotdotdot ) {				// resume-any ?
-	    for ( ;; ) {
-		if ( check( '.' ) ) {			// dot means bound resumption
-		    if ( ahead->prev_parse_token() == befparn ) { // better error handling for try <.Err>
-			goto fini;
-		    } // if
-		    dot = ahead;			// store object address in Handler
-		    scan();
-		    continue;
-		} // if
-		if ( eof() ) goto fini;
-		if ( check( ';' ) ) goto fini;
-		if ( check( LC ) ) goto fini;
-		if ( match( LA ) && ! match_closing( LA, RA ) ) goto fini;
-		if ( check( RA ) ) break;
-		if ( check( ',' ) ) break;
-		scan();
-	    } // for
-	} // if
-	if ( startE == ahead ) goto fini;
-	if ( match( ',' ) ) {
-	    if ( dotdotdot ) {				// resume-any ?
-		gen_code( befparn, "uAnyHandler" );
-		token_t *temp;				// carefully delete over startE etc.
-		temp = ahead->prev_parse_token();
-		temp->remove_token();			// remove ,
-		delete temp;
-		temp = ahead->prev_parse_token();
-		temp->remove_token();			// remove ...
-		delete temp;
-	    } else {
-		gen_code( befparn, "uRoutineHandler" );
-	    } // if
-	    gen_code( ahead, "__typeof__ (" );
-	    startH = ahead;
-	    for ( ;; ) {
-	      if ( eof() ) goto fini;
-	      if ( check( ';' ) ) goto fini;
-	      if ( check( LC ) ) goto fini;
-	      if ( match( LA ) && ! match_closing( LA, RA ) ) goto fini;
-	      if ( check( RA ) ) break;
-		scan();
-	    } // for
-	    if ( startH == ahead ) goto fini;
-	    endH = ahead->prev_parse_token();		// token before '>'
-	    gen_code( ahead, ")" );
-	    match( RA );				// match closing '>'
-	    gen_code( ahead, temp_name );
-	} else {
-	    match( RA );				// match closing '>'
-	    if ( dotdotdot ) {				// resume-any ?
-		gen_code( befparn, "uAnyNullHandler" );
-		token_t *temp;				// carefully delete over startE etc.
-		do {
-		    temp = ahead->prev_parse_token();
-		    temp->remove_token();
-		    delete temp;
-		} while ( temp != befparn );
-		befparn = ahead->prev_parse_token();    // reset befparn since we deleted it but need it later on for resume_any
-	    } else {
-		gen_code( befparn, "uNullHandler" );
-	    } // if
-	    gen_code( ahead, temp_name );
-	} // if
-	gen_code( ahead, "(" );
-	if ( dot ) {					// bound exception ?
-	    gen_code( ahead, "& (" );
-	    move_tokens( ahead, startE, dot );
-	    dot->remove_token();			// remove the dot
-	    delete dot;
-	    gen_code( ahead, ")" );
-	} else {
-	    gen_code( ahead, "( void * ) 0" );
-	} // if
-	if ( startH != NULL ) {				// handler ?
-	    gen_code( ahead, "," );
-	    token_t *next;
-	    for ( token_t *p = startH;; p = next ) {
-		next = p->next_parse_token();
-		gen_code( ahead, p->hash->text );
-	      if ( p == endH ) break;
-	    } // for
-	} // if
-	gen_code( ahead, ") ;" );
-	if ( dotdotdot ) {
-	    resume_any = befparn;			// remember location of resume_any block
-	} else {
-	    resume_any = NULL;
-	} // if
-	return true;
-      fini:
-	gen_error( befparn, "incorrectly formed resume clause." );
-    } // if
-
-    ahead = back; return false;
-} // resume_handler
-
-
 static unsigned int handlerNames = 0;			// unique handler names
 
 static void templateCatchResume( symbol_t *symbol, token_t *startTry ) {
@@ -2111,38 +1997,12 @@ static bool try_block( symbol_t *symbol ) {
 
     start = ahead;
     if ( match( TRY ) ) {
-	token_t *resume_any, *prev = NULL;
 	unsigned int resume_clauses = 0, catch_clauses = 0;
 
 	gen_code( start, "{ bool uOrigRethrow = false ;" ); // bracket try block with flag declaration
 
-	if ( resume_handler( symbol, resume_clauses, resume_any ) ) {
-	    gen_warning( ahead, "try \"<>\" style resumption clause is deprecated. Use \"_CatchResume\" clause at end of try block." );
-	    gen_code( start->next_parse_token(), "{" );
-	    do {
-		resume_clauses += 1;
-		if ( prev != NULL ) {
-		    gen_error( prev, "'...' resumption handler must be the last handler for its try block." );
-		} // if
-		prev = resume_any;
-	    } while ( resume_handler( symbol, resume_clauses, resume_any ) );
-	    gen_code( ahead, "uEHM :: uHandlerBase * uHandlerTable [ ] = {" );
-	    char buffer[20];
-	    for ( unsigned int i = 0; i < resume_clauses; i += 1 ) {
-		sprintf( buffer, "& uHandler%d ,", i );
-		gen_code( ahead, buffer );
-	    } // for
-	    gen_code( ahead, "} ; uEHM :: uResumptionHandlers uResumptionNode ( uHandlerTable ," );
-	    sprintf( buffer, "%d", resume_clauses );
-	    gen_code( ahead, buffer );
-	    gen_code( ahead, ") ;" );
-	} // if
-
 	prefix = ahead;
 	if ( compound_statement( symbol, NULL, 0 ) ) {
-	    if ( resume_clauses > 0 ) {
-	        gen_code( ahead, "}" );
-	    } // if
 	    token_t *prev;
 	    bool bound;					// is catch clause bound ?
 	    prev = ahead;				// location before catch clause

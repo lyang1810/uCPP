@@ -29,6 +29,7 @@
 #define __U_EHM_H__
 
 #include <typeinfo>
+#include <functional>
 
 #define uRendezvousAcceptor uSerialMemberInstance.uAcceptor
 #define uEHMMaxMsg 156
@@ -107,6 +108,7 @@ class uEHM {
     template< typename Functor > class uRoutineHandlerAny;
     template< typename Exn, typename Functor > class uRoutineHandler;
     class uAnyHandler;
+    class uFinallyHandler;
 
     class uHandlerBase;
     class uDeliverEStack;
@@ -290,6 +292,15 @@ class uEHM::uDeliverEStack {
     ~uDeliverEStack();
 }; // uEHM::uDeliverEStack
 
+
+class uEHM::uFinallyHandler {
+    const std::function< void(void) > cleanUpRtn;       // lambda for clean up
+  public:
+    uFinallyHandler( const std::function< void(void) > &cleanUpRtn ) : cleanUpRtn( cleanUpRtn) {}
+    ~uFinallyHandler() noexcept( false ) {              // C++11, allow exception from destructor
+        cleanUpRtn();
+    }
+}; // uEHM::uFinallyHandler
 
 #endif // __U_EHM_H__
 

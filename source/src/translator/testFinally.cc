@@ -15,6 +15,18 @@ class mary {
     }
 };
 
+_Event Grandmother {};
+_Event Father : public Grandmother {};
+_Event Aunt : public Grandmother {};
+_Event Child : public Father {};
+
+class Object {
+  public:
+    void doSomething() {
+        _Throw Grandmother();
+    }
+};
+
 void foo() {
     _Throw fred( 666 );
 }
@@ -191,6 +203,37 @@ class Obj {
             cout << "finally handler" << endl;
         }
     }
+
+    void test13() {
+        Object fred, mary, john;
+        try {
+            try {
+                mary.doSomething();
+            } catch ( Aunt ) {
+
+            } _Finally {
+
+            }
+        } catch ( Father ) {
+
+        } catch ( fred.Child ) {
+
+        } catch ( mary.Aunt ) {
+
+        } catch ( Child ) {
+
+        } catch ( mary.Father ) {
+
+        } catch ( fred.Father ) {
+
+        } catch ( john.Father e ) {
+
+        } catch ( Grandmother e ) {
+
+        } _Finally {
+
+        }
+    }
 };
 
 void uMain::main() {
@@ -220,4 +263,6 @@ void uMain::main() {
     o.test11();
     cout << "Test 12" << endl;
     o.test12();
+    cout << "Test 13" << endl;
+    o.test13();
 }

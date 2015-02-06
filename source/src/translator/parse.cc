@@ -1988,18 +1988,45 @@ static void register_extype( symbol_t *sym, symbolset &parents, symbolset &extyp
 } // register_extype
 
 
+static bool finally_clause( symbol_t *symbol, token_t *start_try ) {
+    token_t *back = ahead;
+
+    if ( match( FINALLY ) ) {
+        token_t *start = ahead;
+        if ( ! compound_statement( symbol, NULL, 0 ) ) return false; // parse finally body
+
+        uassert( symbol->data->key == ROUTINE || symbol->data->key == MEMBER );
+        uassert( symbol->data->attribute.startCR != NULL );
+
+        // wrap finally body into a lambda
+        gen_code(start_try, "uEHM :: uFinallyHandler uFinallyHandler( [&] \n");
+        move_tokens_all( start_try, start, ahead );
+        gen_code(start_try, ");");
+        
+        back->remove_token();  // remove the "_Finally" token
+        return true;
+    } // if
+
+    ahead = back;
+    return false;
+} // finally_clause
+
+
 static bool try_block( symbol_t *symbol ) {
     token_t *back = ahead;
-    token_t *start, *prefix;
+    token_t *start, *prefix, *finally_start;
 
     symbolset parents, extypes;
     symbol_t *exception_type = NULL;
 
     start = ahead;
+    finally_start = ahead;
     if ( match( TRY ) ) {
 	unsigned int resume_clauses = 0, catch_clauses = 0;
+	bool has_finally_clause = false;
 
-	gen_code( start, "{ bool uOrigRethrow = false ;" ); // bracket try block with flag declaration
+	gen_code( start, "{\n");
+	gen_code( start, "bool uOrigRethrow = false ;\n" ); // bracket try block with flag declaration
 
 	prefix = ahead;
 	if ( compound_statement( symbol, NULL, 0 ) ) {
@@ -2067,6 +2094,7 @@ static bool try_block( symbol_t *symbol ) {
 		    extypes.clear();
 		    gen_code( start, "try {" );
 		    gen_code( prev, "}" );
+		    finally_start = finally_start->aft;
 		} // if
 		if ( ! split ) {
 		    while ( ! if_rethrow.empty() ) {	// remove unneeded "if (uOrigRethrow) throw" tokens, i.e., the ones before the first split
@@ -2089,18 +2117,25 @@ static bool try_block( symbol_t *symbol ) {
 		try_catches.pop_front();
 	    } // while
 
-	    // If no catch clause for a resume try block, remove the "try" keyword before the compound statement.
-	    if ( resume_clauses != 0 && catch_clauses == 0 ) {
-		start->remove_token();
-	    } // if
-
-	    if ( split ) {
-		gen_code( ahead, "}" );			// close uOrigRethrow block
-	    } else {
+            gen_code( ahead, "}" );
+	    
+	    if ( !split ) {
 		t = start->prev_parse_token();          // if we don't split, we don't need the "bool uOrigRethrow = false"
 		t->remove_token();
 		delete t;
 	    } // if
+	    
+	    // If no catch clause for a try block, remove the "try" keyword before the compound statement.
+	    if ( catch_clauses == 0 ) {
+	        finally_start = start->fore;
+		start->remove_token();
+	    } // if
+
+	    if ( finally_clause ( symbol, finally_start ) ) {
+                has_finally_clause = true;
+            } // if
+
+	    
 	    return true;
 	} // if
     } // if

@@ -2025,7 +2025,7 @@ static bool try_block( symbol_t *symbol ) {
 	unsigned int resume_clauses = 0, catch_clauses = 0;
 	bool has_finally_clause = false;
 
-	gen_code( start, "{\n");
+	token_t *blockLC = gen_code( start, "{\n");
 	gen_code( start, "bool uOrigRethrow = false ;\n" ); // bracket try block with flag declaration
 
 	prefix = ahead;
@@ -2117,7 +2117,7 @@ static bool try_block( symbol_t *symbol ) {
 		try_catches.pop_front();
 	    } // while
 
-            gen_code( ahead, "}" );
+            token_t *blockRC = gen_code( ahead, "}" );
 	    
 	    if ( !split ) {
 		t = start->prev_parse_token();          // if we don't split, we don't need the "bool uOrigRethrow = false"
@@ -2135,7 +2135,11 @@ static bool try_block( symbol_t *symbol ) {
                 has_finally_clause = true;
             } // if
 
-	    
+            if ( !split && !has_finally_clause ) {      // remove unneeded { } block
+                blockLC->remove_token();
+                blockRC->remove_token();
+            }
+
 	    return true;
 	} // if
     } // if

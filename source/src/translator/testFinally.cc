@@ -166,6 +166,31 @@ class Obj {
             cout << "finally handler" << endl;
         }
     }
+
+    void test12() {
+        mary m1, m2;
+        try {
+            cout << "try" << endl;
+        } _CatchResume ( m1.fred f ) {
+            cout << "m1.f resume handler" << endl;
+        } _CatchResume ( m2.fred f ) {
+            cout << "m2.f resume handler" << endl;
+        } _CatchResume ( fred f ) {
+            cout << "fred resume handler" << endl;
+        } _CatchResume ( ... ) {
+            cout << "resume handler" << endl;
+        } catch ( m1.fred f ) {
+            cout << "m1.f termination handler" << endl;
+        } catch ( m2.fred f ) {
+            cout << "m2.f termination handler" << endl;
+        } catch ( fred f ) {
+            cout << "fred termination handler" << endl;
+        } catch ( ... ) {
+            cout << "termination handler" << endl;
+        } _Finally {
+            cout << "finally handler" << endl;
+        }
+    }
 };
 
 void uMain::main() {
@@ -193,4 +218,6 @@ void uMain::main() {
     Obj o;
     cout << "Test 11" << endl;
     o.test11();
+    cout << "Test 12" << endl;
+    o.test12();
 }

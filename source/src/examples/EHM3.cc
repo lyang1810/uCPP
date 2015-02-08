@@ -54,7 +54,7 @@ _Task T1 {
 				try {
 					_Resume D() _At uThisTask();
 					_Enable;
-				} _CatchResume( D ) ( uBaseTask p, int count ) {
+				} _CatchResume( D ) {
 					count -= 1;
 					osacquire( cout ) << "Handler R: first" << endl;
 					if ( count > 0 ) {
@@ -122,7 +122,7 @@ void uMain::main() {
 			f( x, y );
 			osacquire( cout ) << "try<R2,rtn2>, x:" << x << " y:" << y << endl;
 		} _CatchResume( R1 ) {
-		} _CatchResume( R2 ) ( int x, char y ) {
+		} _CatchResume( R2 ) {
 			osacquire( cout ) << "rtn2, i:" << x << " c:" << y << endl;
 			x = 2; y = 'c';
 		} // try
@@ -130,7 +130,7 @@ void uMain::main() {
 			g( x, y );
 			osacquire( cout ) << "try<R1>, x:" << x << " y:" << y << endl;
 		} _CatchResume( R1 ) {
-		} _CatchResume( R2 ) ( int x, char y ) {
+		} _CatchResume( R2 ) {
 			osacquire( cout ) << "rtn2, i:" << x << " c:" << y << endl;
 			x = 2; y = 'c';
 		} // try

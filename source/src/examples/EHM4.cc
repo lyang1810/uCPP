@@ -76,7 +76,7 @@ void worker::main() {
 				} // for
 			} // for
 		} // _Enable
-	} _CatchResume ( Rev &r ) ( int id, int round ) {
+	} _CatchResume ( Rev &r ) {
 		handled[id] += 1;								// count exceptions handled by each task
 		//osacquire( cerr ) << "handler, exception id: " << e.ticket << endl;
 		assert( r.ticket < NTASK*((NTASK-1)*ROUNDS+1) ); // subscript error ?

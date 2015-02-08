@@ -33,11 +33,13 @@ void foo() {
 
 // try & finally
 void test1() {
+    int i = 0;
     try {
         cout << "try" << endl;
     } _Finally {
         cout << "finally handler" << endl;
     }
+    i += 1;
 }
 
 // try & catch
@@ -71,9 +73,11 @@ void test4() {
 
 // try & resume & finally
 void test5() {
+    int i = 0;
     try {
         cout << "try" << endl;
     } _CatchResume ( ... ) {
+        i += 1;
         cout << "resume handler" << endl;
     } _Finally {
         cout << "finally handler" << endl;

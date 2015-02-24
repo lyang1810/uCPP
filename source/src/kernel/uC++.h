@@ -7,8 +7,8 @@
 // Author           : Peter A. Buhr
 // Created On       : Fri Dec 17 22:04:27 1993
 // Last Modified By : Peter A. Buhr
-// Last Modified On : Wed Jan  7 23:35:04 2015
-// Update Count     : 5591
+// Last Modified On : Tue Jan 20 21:23:51 2015
+// Update Count     : 5594
 //
 // This  library is free  software; you  can redistribute  it and/or  modify it
 // under the terms of the GNU Lesser General Public License as published by the
@@ -1405,19 +1405,20 @@ class uBaseCoroutine : public UPP::uMachContext {
     } // uBaseCoroutine::resume
 
     void suspend() {					// restarts the coroutine that most recently resumed this coroutine
+	uBaseCoroutine &c = uThisCoroutine();		// optimization
 #ifdef __U_DEBUG__
-	if ( last == NULL ) {
+	if ( c.last == NULL ) {
 	    uAbort( "Attempt to suspend coroutine %.256s (%p) that has never been resumed.\n"
 		    "Possible cause is a suspend executed in a member called by a coroutine user rather than by the coroutine main.",
-		    getName(), this );
+		    c.getName(), this );
 	} // if
-	if ( ! last->notHalted ) {			// check if terminated
+	if ( ! c.last->notHalted ) {	// check if terminated
 	    uAbort( "Attempt by coroutine %.256s (%p) to suspend back to terminated coroutine %.256s (%p).\n"
 		    "Possible cause is terminated coroutine's main routine has already returned.",
-		    uThisCoroutine().getName(), &uThisCoroutine(), last->getName(), last );
+		    getName(), this, c.last->getName(), c.last );
 	} // if
 #endif // __U_DEBUG__
-	last->contextSw2();
+	c.last->contextSw2();
 
 	_Enable <uBaseCoroutine::Failure>;		// implicit poll
     } // uBaseCoroutine::suspend

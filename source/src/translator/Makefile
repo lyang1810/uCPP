@@ -44,7 +44,7 @@ CPPNAME = cc1plus
 
 HOSTNAME = ${shell hostname}
 ifeq (${HOSTNAME},plg2)			# development machine
-	CCFLAGS += -g -Wall # -O2
+	CCFLAGS += -g -Wall -O2 #
 else
 	CCFLAGS += -O2 # -DNDEBUG
 endif
@@ -121,7 +121,7 @@ install : all ${INSTALLFILES}
 
 test :
 	set -x ; \
-	for filename in Operators AcceptStmt SelectStmt BreakStmt Resumption CatchResume Exception Termination Event MutexTaskParms Constructor \
+	for filename in Operators AcceptStmt SelectStmt BreakStmt CatchResume Exception Termination Event MutexTaskParms Constructor \
 			Lookup InheritanceException Template Friend Inheritance STL Types C++11 ; do \
 		${INSTALLBINDIR}/u++ ${CCFLAGS} -Wno-unused-label -c test$${filename}.cc ; \
 	done ; \

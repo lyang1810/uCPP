@@ -7,8 +7,8 @@
 // Author           : Richard A. Stroobosscher
 // Created On       : Tue Apr 28 15:10:34 1992
 // Last Modified By : Peter A. Buhr
-// Last Modified On : Sat Dec 27 18:18:43 2014
-// Update Count     : 4346
+// Last Modified On : Tue Feb 17 22:02:19 2015
+// Update Count     : 4370
 //
 // This  library is free  software; you  can redistribute  it and/or  modify it
 // under the terms of the GNU Lesser General Public License as published by the
@@ -167,8 +167,6 @@ condition
     (...)  // if, switch, while, for, _When, _Timeout, _Select, member_initializer
 static_assert_declaration
     static_assert(...)
-resume_handler
-    try < template<...> >  // deprecated
 event_handler
     _Enable< template<...> >
 template_parameter
@@ -1119,9 +1117,6 @@ static bool or_accept_clause( token_t *startposn, bool &uncondaccept, jump_t *&l
 	    separator = ahead;				// remember where to put the separator
  	    bool right = or_accept_clause( startposn, uncondaccept, list, accept_no, symbol );
 	    if ( right ) {
-		if ( elsePosn != NULL ) {
-		    gen_warning( ahead, "keyword \"else\" is deprecated for connecting _Accept clauses. Use keyword \"or\"." );
-		} // if
 		gen_code( separator, "else" );
 		return true;
 	    } else {
@@ -1155,10 +1150,6 @@ static bool accept_timeout_clause( token_t *start, token_t *&timeout, bool &unco
 	when_clause( wstart, wend );			// optional
 
 	if ( match ( TIMEOUT ) ) {
-	    if ( elsePosn != NULL ) {
-		gen_warning( elsePosn, "keyword \"else\" is deprecated for connecting _Timeout clause. Use keyword \"or\"." );
-	    } // if
-
 	    token_t *posn = ahead;
 
 	    if ( condition() ) {
@@ -1682,15 +1673,16 @@ static bool catchResume_body( symbol_t *symbol, attribute_t &attribute, token_t 
     uassert( symbol->data->attribute.startCR != NULL );
 
     // resumption table entry
-    if ( dotdotdot ) {
-        gen_code( startTry, "uRoutineHandlerAny" );
-    } else {
-        gen_code( startTry, "uRoutineHandler <" );
-        copy_tokens( startTry, bound.exbegin, bound.idleft );
-        gen_code( startTry, ">" );
-    }
 
-    sprintf( buffer, "uHandler%d (", handler );         // begin handler constructor
+    if ( dotdotdot ) {
+	gen_code( startTry, "uRoutineHandlerAny" );
+    } else {
+	gen_code( startTry, "uRoutineHandler <" );
+	copy_tokens( startTry, bound.exbegin, bound.idleft );
+	gen_code( startTry, ">" );
+    } // if
+
+    sprintf( buffer, "uHandler%d (", handler );		// begin handler constructor
     gen_code( startTry, buffer );
 
     if ( bound.oleft != NULL ) {			// bound object ?
@@ -1701,14 +1693,14 @@ static bool catchResume_body( symbol_t *symbol, attribute_t &attribute, token_t 
 	gen_code( startTry, ") ," );
     } // if
 
+    // hoist _CatchResume clause into lambda
 
-    // hoist _CatchResume clause into a lambda
     gen_code( startTry, "[&]" );
     gen_code( startTry, '\n' );
     gen_code( startTry, linedir, '#' );
     move_tokens_all( startTry, back, ahead );
 
-    gen_code( startTry, ") ;" );                        // end handler constructor
+    gen_code( startTry, ") ;" );			// end handler constructor
 
     return true;
 } // catchResume_body
@@ -1770,6 +1762,7 @@ static bool catch_clause( symbol_t *symbol, bool &bflag, bool &optimized, hash_t
 		    gen_code( ahead, "catch( ... ) { uOrigRethrow = true; throw; }" );
 		    try_catches.push_front( ahead->prev_parse_token() ); // possible later deletion if the try block is not split
 		    gen_code( ahead, "}" );
+		para_name = NULL;			// prevent optimization
 		    return true;
 		} // if
 		para_name = NULL;			// prevent optimization
@@ -1813,7 +1806,7 @@ static bool catch_clause( symbol_t *symbol, bool &bflag, bool &optimized, hash_t
 
 		    // Optimization part, remove catch clause, remove "if uOrigRethrow", remove "getOriginalThrower()",
 		    // add "else".  It would be more efficient to not insert them in the first place, but I like to keep
-		    // the optimization code seperate from the normal case.
+		    // the optimization code separate from the normal case.
 
 		    if ( exception_type == bound.extype && local_param_name == para_name ) {
 			optimized = true;
@@ -1886,28 +1879,28 @@ static bool finally_clause( symbol_t *symbol, token_t *start ) {
     token_t *back = ahead;
 
     if ( match( FINALLY ) ) {
-        token_t *prev = ahead;
+	token_t *prev = ahead;
 
-        // line-number directive for the hoisted finally clause
+	// line-number directive for the hoisted finally clause
 
-        char linedir[32 + strlen( file )];
-        sprintf( linedir, "# %d \"%s\"\n", line, file );
+	char linedir[32 + strlen( file )];
+	sprintf( linedir, "# %d \"%s\"\n", line, file );
 
       if ( ! compound_statement( symbol, NULL, 0 ) ) return false; // parse finally body
 
-        uassert( symbol->data->key == ROUTINE || symbol->data->key == MEMBER );
-        uassert( symbol->data->attribute.startCR != NULL );
+	uassert( symbol->data->key == ROUTINE || symbol->data->key == MEMBER );
+	uassert( symbol->data->attribute.startCR != NULL );
 
-        // hoist finally clause into a lambda
+	// hoist finally clause into lambda
 
-        gen_code( start, "uEHM :: uFinallyHandler uFinallyHandler( [&]" );
-        gen_code( start, '\n' );
-        gen_code( start, linedir, '#' );
-        move_tokens_all( start, prev, ahead );
-        gen_code( start, ") ;" );
+	gen_code( start, "uEHM :: uFinallyHandler uFinallyHandler( [&]" );
+	gen_code( start, '\n' );
+	gen_code( start, linedir, '#' );
+	move_tokens_all( start, prev, ahead );
+	gen_code( start, ") ;" );
 
-        back->remove_token();  // remove the "_Finally" token
-        return true;
+	back->remove_token();				// remove the "_Finally" token
+	return true;
     } // if
 
     ahead = back;
@@ -1924,16 +1917,15 @@ static bool try_block( symbol_t *symbol ) {
 
     start = ahead;
     if ( match( TRY ) ) {
-        char linedir[32 + strlen( file )];
-        unsigned int resume_clauses = 0, catch_clauses = 0, finally_clauses = 0;
-
-	token_t *blockLC = gen_code( start, "{");
+	char linedir[32 + strlen( file )];
+	unsigned int resume_clauses = 0, catch_clauses = 0, finally_clauses = 0;
+	token_t *blockLC = gen_code( start, "{" );	// bracket try block
 
 	// line-number directive for the try clause
 
-        sprintf( linedir, "# %d \"%s\"\n", line, file );
-        prefix = gen_code( ahead, '\n' );
-        gen_code( ahead, linedir, '#' );
+	sprintf( linedir, "# %d \"%s\"\n", line, file );
+	prefix = gen_code( ahead, '\n' );
+	gen_code( ahead, linedir, '#' );
 
 	if ( compound_statement( symbol, NULL, 0 ) ) {
 	    token_t *prev;
@@ -1973,12 +1965,12 @@ static bool try_block( symbol_t *symbol ) {
 		gen_code( prefix, ") ;" );
 		gen_code( ahead, "}" );
 
-                // line-number directive for catch clauses after _CatchResume clauses in a try-block
-                if ( check( CATCH ) ) {
-                    sprintf( linedir, "# %d \"%s\"\n", line, file );
-                    gen_code( ahead, '\n' );
-                    gen_code( ahead, linedir, '#' );
-                }
+		// line-number directive for catch clauses after _CatchResume clauses in a try-block
+		if ( check( CATCH ) ) {
+		    sprintf( linedir, "# %d \"%s\"\n", line, file );
+		    gen_code( ahead, '\n' );
+		    gen_code( ahead, linedir, '#' );
+		} // if
 	    } // if
 
 	    while ( catch_clause( symbol, bound, optimized, para_name, exception_type, try_catches, if_rethrow ) ) {
@@ -2012,24 +2004,26 @@ static bool try_block( symbol_t *symbol ) {
 		try_catches.pop_front();
 	    } // while
 
-            gen_code( ahead, "}" );
+	    gen_code( ahead, "}" );
 
 	    if ( split ) {
-	        gen_code( blockLC->fore, "bool uOrigRethrow = false ;" ); // if we have splits, bracket try block with flag declaration
+		gen_code( blockLC->fore, "bool uOrigRethrow = false ;" ); // if splits, bracket try block with flag declaration
 	    } // if
 
 	    if ( finally_clause ( symbol, blockLC->fore ) ) {
-                finally_clauses = 1;
-            } // if
+		finally_clauses = 1;
+	    } // if
 
-            // line-number directive for code after the try-block
+	    // line-number directive for code after try-block
+
 	    sprintf( linedir, "# %d \"%s\"\n", line, file );
 	    gen_code( ahead, '\n' );
 	    gen_code( ahead, linedir, '#' );
 
-	    // If no catch clause for a try block, remove the "try" keyword before the compound statement.
+	    // If resume clauses but no catch clause for a try block, remove the "try" keyword before the compound
+	    // statement because a try block cannot exist without a catch clause.
 	    if ( catch_clauses == 0 && ( resume_clauses > 0 || finally_clauses > 0 ) ) {
-	        start->remove_token();
+		start->remove_token();
 	    } // if
 
 	    return true;
@@ -2069,7 +2063,7 @@ static bool raise_expression( key_value_t kind, symbol_t *symbol ) {
 	  if ( eof() ) break;
 	    if ( match( AT ) ) {
 		if ( kind == UTHROW ) {
-		    gen_error( back, "keyword \"_Throw\" is deprecated for asynchronous raise.\nUse keyword \"_Resume\" with appropriate default resumption handler to achieve the same effect." );
+		    gen_error( back, "keyword \"_Throw\" is not used for asynchronous raise.\nUse keyword \"_Resume\" with appropriate default resumption handler to achieve the same effect." );
 		} // if
 		if ( ahead->prev_parse_token() == prefix ) { // async reraise ?
 		    gen_code( prefix, "uEHM ::" );
@@ -2859,6 +2853,7 @@ static bool template_parameter_list( attribute_t &attribute ) {
 
     return true;
 } // template_parameter_list
+
 
 static bool task_parameter_list( attribute_t &attribute ) {
     token_t *back = ahead;
@@ -4835,7 +4830,7 @@ static bool bound_exception_declaration( bound_t &b ) {
 	b.idleft = ahead;				// start of exception parameter
 	if ( b.idleft == b.idright ) {			// no exception parameter ?
 	    // add a dummy exception parameter name to access the thrown object
-	    b.idleft = gen_code( ahead, "U_BOUND_PARM", IDENTIFIER );
+	    b.idleft = gen_code( ahead, "_U_boundParm", IDENTIFIER );
 	} // if
 	ahead = b.idright->next_parse_token();		// reset the parse location to after ')'
 	return true;

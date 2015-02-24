@@ -1,28 +1,28 @@
-//                              -*- Mode: C++ -*- 
-// 
+//                              -*- Mode: C++ -*-
+//
 // uC++ Version 6.1.0, Copyright (C) Richard C. Bilson 2007
-// 
-// uBaseSelector.h -- 
-// 
+//
+// uBaseSelector.h --
+//
 // Author           : Richard C. Bilson
 // Created On       : Sat Jul 14 07:25:52 2007
 // Last Modified By : Peter A. Buhr
-// Last Modified On : Wed May 14 15:23:54 2014
-// Update Count     : 154
-// 
+// Last Modified On : Thu Feb 12 23:52:41 2015
+// Update Count     : 159
+//
 // This  library is free  software; you  can redistribute  it and/or  modify it
 // under the terms of the GNU Lesser General Public License as published by the
 // Free Software  Foundation; either  version 2.1 of  the License, or  (at your
 // option) any later version.
-// 
+//
 // This library is distributed in the  hope that it will be useful, but WITHOUT
 // ANY  WARRANTY;  without even  the  implied  warranty  of MERCHANTABILITY  or
 // FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License
 // for more details.
-// 
+//
 // You should  have received a  copy of the  GNU Lesser General  Public License
 // along  with this library.
-// 
+//
 
 
 #ifndef __U_BASESELECTOR_H__
@@ -44,7 +44,7 @@ namespace UPP {
     //
     //    _Select( f1 || f2 ) A;
     //
-    // because the expression 
+    // because the expression
     // A binary node represents a logical operation (|| or &&) relating unary or future nodes.
 
     //  U(A)  U(A)        B(no A)
@@ -53,7 +53,7 @@ namespace UPP {
 
     // Tree nodes are built and chained together on the stack of the thread executing the _Select statement, so there is
     // no dynamic allocation. The code is generalized to allow potential use in other situations.
-    
+
     struct BaseFutureDL : public uSeqable {
 	virtual void signal() = 0;
 	virtual ~BaseFutureDL() {}
@@ -112,36 +112,36 @@ namespace UPP {
     template< typename Selectee, typename ActionType > class UnarySelector {
 	typedef UnarySelector< Selectee, ActionType > ThisSelector;
 	template< typename S > friend struct Helper;
-	SelectorDL baseFuture;				// 
+	SelectorDL baseFuture;				//
 	Selectee &selectee;				// future in _Select clause
 	ActionType action;				// (int) key to locate _Select action in switch (conceptually pointer to lambda)
 	bool guard;					// value of _When guard at start of _Select; no guard => true, i.e., _When( true )
 	bool doRemove;
 	bool hasAction;					// futures in an expression, e.g., f1 || f2, have no action
       public:
-	UnarySelector( const Selectee &q, ActionType act ) : selectee( const_cast< Selectee& >( q ) ), action( act ), guard( true ), doRemove( false ), hasAction( true ) {
+	UnarySelector( const Selectee &q, ActionType act ) : selectee( const_cast< Selectee & >( q ) ), action( act ), guard( true ), doRemove( false ), hasAction( true ) {
 	} // UnarySelector::UnarySelector
 
-	UnarySelector( bool guard_, const Selectee &q, ActionType act ) : selectee( const_cast< Selectee& >( q ) ), action( act ), guard( guard_ ), doRemove( false ), hasAction( true ) {
+	UnarySelector( bool guard_, const Selectee &q, ActionType act ) : selectee( const_cast< Selectee & >( q ) ), action( act ), guard( guard_ ), doRemove( false ), hasAction( true ) {
 	} // UnarySelector::UnarySelector
 
-	UnarySelector( const Selectee &q ) : selectee( const_cast< Selectee& >( q ) ), guard( true ), doRemove( false ), hasAction( false ) {
+	UnarySelector( const Selectee &q ) : selectee( const_cast< Selectee & >( q ) ), guard( true ), doRemove( false ), hasAction( false ) {
 	} // UnarySelector::UnarySelector
 
-	UnarySelector( bool guard_, const Selectee &q ) : selectee( const_cast< Selectee& >( q ) ), guard( guard_ ), doRemove( false ), hasAction( false ) {
+	UnarySelector( bool guard_, const Selectee &q ) : selectee( const_cast< Selectee & >( q ) ), guard( guard_ ), doRemove( false ), hasAction( false ) {
 	} // UnarySelector::UnarySelector
 
-//	ThisSelector addAction( const ActionType &act ) const {
-//	    ThisSelector ret( *this );
-//	    ret.action = act;
-//	    return ret;
-//	} // UnarySelector::addAction
+ 	// ThisSelector addAction( const ActionType &act ) const {
+ 	//     ThisSelector ret( *this );
+ 	//     ret.action = act;
+ 	//     return ret;
+ 	// } // UnarySelector::addAction
 
-//	ThisSelector addGuard( bool guard ) const {
-//	    ThisSelector ret( *this );
-//	    ret.guard = guard;
-//	    return ret;
-//	} // UnarySelector::addGuard
+ 	// ThisSelector addGuard( bool guard ) const {
+ 	//     ThisSelector ret( *this );
+ 	//     ret.guard = guard;
+ 	//     return ret;
+ 	// } // UnarySelector::addGuard
 
 	SelectorStatus addAccept( SelectorDL *acceptState, bool &hasAction_, ActionType &action_ ) {
 	    //std::osacquire( std::cerr ) << "UnarySelector::addAccept " << this << " guard " << guard << std::endl;
@@ -179,17 +179,17 @@ namespace UPP {
 	    return child;
 	} // UnarySelector::available
 
-//	template< typename Other > BinarySelector< OrCondition, ThisSelector, UnarySelector< Other, int >, int > operator||( const Other &s2 ) {
-//	    return BinarySelector< OrCondition, ThisSelector, UnarySelector< Other, int >, int >( *this, UnarySelector< Other, int >( s2 ) );
-//	} // UnarySelector::operator||
+	// template< typename Other > BinarySelector< OrCondition, ThisSelector, UnarySelector< Other, int >, int > operator||( const Other &s2 ) {
+	//     return BinarySelector< OrCondition, ThisSelector, UnarySelector< Other, int >, int >( *this, UnarySelector< Other, int >( s2 ) );
+	// } // UnarySelector::operator||
 
-//	template< typename Other >
-//	BinarySelector< AndCondition, ThisSelector, UnarySelector< Other, int >, int > operator&&( const Other &s2 ) {
-//	    return BinarySelector< AndCondition, ThisSelector, UnarySelector< Other, int >, int >( *this, UnarySelector< Other, int >( s2 ) );
-//	} // UnarySelector::operator&&
+	// template< typename Other >
+	// BinarySelector< AndCondition, ThisSelector, UnarySelector< Other, int >, int > operator&&( const Other &s2 ) {
+	//     return BinarySelector< AndCondition, ThisSelector, UnarySelector< Other, int >, int >( *this, UnarySelector< Other, int >( s2 ) );
+	// } // UnarySelector::operator&&
     }; // UnarySelector
 
-    // Left and Right must be copyable and selectable types 
+    // Left and Right must be copyable and selectable types
     template< typename Condition, typename Left, typename Right, typename ActionType > class BinarySelector {
 	template< typename C, typename L, typename R, typename A > friend BinarySelector< C, L, R, A > &when( bool cond, BinarySelector< C, L, R, A > &selectee );
 	typedef BinarySelector< Condition, Left, Right, ActionType > ThisSelector;
@@ -197,17 +197,17 @@ namespace UPP {
 	SelectorDL baseFuture;
 	Left left;					// left branch (unary or binary selector)
 	Right right;					// right branch (unary or binary selector)
-//	ActionType action;				// key used to locate _Select action in switch
+	// ActionType action;				// key used to locate _Select action in switch
 	bool guard;					// value of _When guard at start of _Select; no guard => true, i.e., _When( true )
 	bool removeLeft, removeRight;
-//	bool hasAction;
+	// bool hasAction;
       public:
 	// BinarySelector does not have an action because the actions are associated with the UnarySelectors of leafs.
-//	BinarySelector( const Left &left_, const Right &right_, ActionType act ) : left( left_ ), right( right_ ), action( act ), guard( true ), removeLeft( false ), removeRight( false ), hasAction( true ) {
-//	} // BinarySelector::BinarySelector
+	// BinarySelector( const Left &left_, const Right &right_, ActionType act ) : left( left_ ), right( right_ ), action( act ), guard( true ), removeLeft( false ), removeRight( false ), hasAction( true ) {
+	// } // BinarySelector::BinarySelector
 
-//	BinarySelector( bool guard_, const Left &left_, const Right &right_, ActionType act ) : left( left_ ), right( right_ ), action( act ), guard( guard_ ), removeLeft( false ), removeRight( false ), hasAction( true ) {
-//	} // BinarySelector::BinarySelector
+	// BinarySelector( bool guard_, const Left &left_, const Right &right_, ActionType act ) : left( left_ ), right( right_ ), action( act ), guard( guard_ ), removeLeft( false ), removeRight( false ), hasAction( true ) {
+	// } // BinarySelector::BinarySelector
 
 	BinarySelector( const Left &left_, const Right &right_ ) : left( left_ ), right( right_ ), guard( true ), removeLeft( false ), removeRight( false )/*, hasAction( false )*/ {
 	} // BinarySelector::BinarySelector
@@ -215,19 +215,19 @@ namespace UPP {
 	BinarySelector( bool guard_, const Left &left_, const Right &right_ ) : left( left_ ), right( right_ ), guard( guard_ ), removeLeft( false ), removeRight( false )/*, hasAction( false )*/ {
 	} // BinarySelector::BinarySelector
 
-//	ThisSelector addAction( ActionType act ) const {
-//	    ThisSelector ret( *this );
-//	    ret.action = act;
-//	    return ret;
-//	} // BinarySelector::addAction
+	// ThisSelector addAction( ActionType act ) const {
+	//     ThisSelector ret( *this );
+	//     ret.action = act;
+	//     return ret;
+	// } // BinarySelector::addAction
 
-//	ThisSelector addGuard( bool guard ) const {
-//	    ThisSelector ret( *this );
-//	    ret.guard = guard;
-//	    return ret;
-//	} // BinarySelector::addGuard
+	// ThisSelector addGuard( bool guard ) const {
+	//     ThisSelector ret( *this );
+	//     ret.guard = guard;
+	//     return ret;
+	// } // BinarySelector::addGuard
 
-	// Called on the 
+	// Called on the
 	SelectorStatus addAccept( SelectorDL *acceptState, bool &hasAction_, ActionType &action_ ) {
 	    //std::osacquire( std::cerr ) << "BinarySelector::addAccept " << this << " guard " << guard << std::endl;
 	    if ( ! guard ) return GuardFalse;
@@ -253,10 +253,10 @@ namespace UPP {
 		} // if
 	    } // if
 	    if ( sat == Avail && ! hasAction_ /*&& hasAction*/ ) {
-//		hasAction = false;
+		// hasAction = false;
 		hasAction_ = true;
-//		//std::osacquire( std::cerr ) << "BinarySelector::addAccept assigning action " << action << std::endl;
-//		action_ = action;
+		// std::osacquire( std::cerr ) << "BinarySelector::addAccept assigning action " << action << std::endl;
+		// action_ = action;
 	    } // if
 	    if ( sat != NAvail ) {
 		removeAccept( acceptState );
@@ -304,10 +304,10 @@ namespace UPP {
 		} // if
 	    } // if
 	    if ( sat == Avail && ! hasAction_ /*&& hasAction*/ ) {
-//		hasAction = false;
+		// hasAction = false;
 		hasAction_ = true;
 //		//std::osacquire( std::cerr ) << "BinarySelector::available assigning action " << action << std::endl;
-//		action_ = action;
+		// action_ = action;
 	    } // if
 	    //std::osacquire( std::cerr ) << "BinarySelector::available " << this << " returns " << sat << std::endl;
 	    return sat;
@@ -434,18 +434,18 @@ namespace UPP {
 	Selector &selector;
 	uTime timeout;
 	bool hasTimeout, hasElse;
-
+	bool isFinish;
       public:
 	enum { Done = 0, ElseAction = 1, TimeoutAction = 2 };
 
-	Executor( Selector &selector_ ) : selector( selector_ ), hasTimeout( false ), hasElse( false ) {}
-	Executor( Selector &selector_, bool elseGuard ) : selector( selector_ ), hasTimeout( false ), hasElse( elseGuard ) {}
-	Executor( Selector &selector_, uTime timeout_ ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( true ), hasElse( false ) {}
-	Executor( Selector &selector_, uDuration timeout_ ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( true ), hasElse( false ) {}
-	Executor( Selector &selector_, bool timeoutGuard, uTime timeout_ ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( timeoutGuard ), hasElse( false ) {}
-	Executor( Selector &selector_, bool timeoutGuard, uDuration timeout_ ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( timeoutGuard ), hasElse( false ) {}
-	Executor( Selector &selector_, bool timeoutGuard, uTime timeout_, bool elseGuard ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( timeoutGuard ), hasElse( elseGuard ) {}
-	Executor( Selector &selector_, bool timeoutGuard, uDuration timeout_, bool elseGuard ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( timeoutGuard ), hasElse( elseGuard ) {}
+	Executor( Selector &selector_ ) : selector( selector_ ), hasTimeout( false ), hasElse( false ), isFinish( false ) {}
+	Executor( Selector &selector_, bool elseGuard ) : selector( selector_ ), hasTimeout( false ), hasElse( elseGuard ), isFinish( false ) {}
+	Executor( Selector &selector_, uTime timeout_ ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( true ), hasElse( false ), isFinish( false ) {}
+	Executor( Selector &selector_, uDuration timeout_ ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( true ), hasElse( false ), isFinish( false ) {}
+	Executor( Selector &selector_, bool timeoutGuard, uTime timeout_ ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( timeoutGuard ), hasElse( false ), isFinish( false ) {}
+	Executor( Selector &selector_, bool timeoutGuard, uDuration timeout_ ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( timeoutGuard ), hasElse( false ), isFinish( false ) {}
+	Executor( Selector &selector_, bool timeoutGuard, uTime timeout_, bool elseGuard ) : selector( selector_ ), timeout( timeout_ ), hasTimeout( timeoutGuard ), hasElse( elseGuard ), isFinish( false ) {}
+	Executor( Selector &selector_, bool timeoutGuard, uDuration timeout_, bool elseGuard ) : selector( selector_ ), timeout( uThisProcessor().getClock().getTime() + timeout_ ), hasTimeout( timeoutGuard ), hasElse( elseGuard ), isFinish( false ) {}
 
 	int nextAction() {
 	    //std::osacquire( std::cerr ) << "Executor::nextAction enter" << std::endl;
@@ -463,9 +463,15 @@ namespace UPP {
 		    return ElseAction;
 		} // if
 	    } else {
+		if (isFinish) {
+		    return Done;
+		}
 		//std::osacquire( std::cerr ) << "Executor::nextAction no hasElse" << std::endl;
 		isAvailable = UPP::nextAction( selector, hasAction, todo, hasTimeout ? &timeout : 0 );
 		//std::osacquire( std::cerr ) << "Executor::nextAction isAvailable " << isAvailable << " hasAction " << hasAction << " hasTimeout " << hasTimeout << std::endl;
+		if (isAvailable) {
+		    isFinish = true;
+		}
 		if ( hasAction ) {
 		    return todo;
 		} else {

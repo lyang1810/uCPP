@@ -7,8 +7,8 @@
 // Author           : Peter A. Buhr
 // Created On       : Mon Mar  7 13:56:53 1994
 // Last Modified By : Peter A. Buhr
-// Last Modified On : Fri Jan 16 22:42:30 2015
-// Update Count     : 1451
+// Last Modified On : Wed Feb 11 13:13:14 2015
+// Update Count     : 1465
 //
 // This  library is free  software; you  can redistribute  it and/or  modify it
 // under the terms of the GNU Lesser General Public License as published by the
@@ -125,6 +125,11 @@ namespace UPP {
 	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
     }; // msbpostab
 
+    /****************** msbpos ********************
+	Purpose: Find the most significant bit's  position
+	Parameter: unsigned int
+	Reference: http://graphics.stanford.edu/~seander/bithacks.html#IntegerLogLookup
+    **************************************************/
     static inline int msbpos( size_t v ) {
 	int l;						// l is lg(v)
 	register size_t t, tt;
@@ -150,19 +155,23 @@ namespace UPP {
 #endif
 
 
+    /****************** findMaxFD *******************
+	Purpose: Find the most significant digit in the mask
+	Parameter: previousMaxFD, readMask, writeMask, exceptionMask
+	Return: maxFD
+    **************************************************/
     static inline int findMaxFD( unsigned int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds ) {
 	unsigned int prevMax = nfds;
 	nfds = 0;
-    
-	// Search backwards from previous max
-	fd_mask tmask = howmany( prevMax, NFDBITS ) - 1;
-	fd_mask combined = 0;
+
+	fd_mask tmask = howmany( prevMax, NFDBITS ) - 1; // number of "chunks" (words) in previous mask
+	fd_mask combined;
 
 	// This code makes assumptions about the implementation of fd_set.  Namely that the size of each chunk is the
 	// same as the size of "combined" and the most significant bit contains the highest numbered fd.
 	_STATIC_ASSERT_( (sizeof(combined) * 8) == NFDBITS );
 
-	for ( int i = tmask; 0 <= i; i -= 1 ) {
+	for ( int i = tmask; 0 <= i; i -= 1 ) {		// search backwards from previous max
 	    if ( rfds != NULL ) combined |= rfds->fds_bits[i];
 	    if ( wfds != NULL ) combined |= wfds->fds_bits[i];
 	    if ( efds != NULL ) combined |= efds->fds_bits[i];
@@ -179,32 +188,46 @@ namespace UPP {
     //######################### uSelectTimeoutHndlr #########################
 
 
+    /******************** handler ********************
+	Purpose: Handle timeout event
+	Effect: For each cluster, if there is an IOPoller, wake up IOPoller to check bit mask
+    **************************************************/
     void uNBIO::uSelectTimeoutHndlr::handler() {
 	*node.nbioTimeout = node.timedout = true;
 	uPid_t temp = cluster.NBIO->IOPollerPid;	// race: IOPollerPid can change to -1 if poller wakes before wakeup
-	if ( temp != (uPid_t)-1 ) cluster.wakeProcessor( temp );
+	if ( temp != (uPid_t)-1 ) cluster.wakeProcessor( temp ); // IOPoller set ? => wakeup
     } // uNBIO::uSelectTimeoutHndlr::handler
 
 
     //######################### uNBIO #########################
 
 
+    /***************** checkIOStart ******************
+	Purpose: Initialize mask before checking
+	Effect: Update master read/write/exception mask from both singleFD mask and multipleFD mask
+    **************************************************/
     void uNBIO::checkIOStart() {
 	// Combine the single and multiple master masks to form the master mask.
 
+	// get maxFD and minFD from singleFD and multipleFD
 	maxFD = max( smaxFD, mmaxFD );
 	assert( maxFD != 0 );
 #ifdef __U_STATISTICS__
 	if ( maxFD > Statistics::select_maxFD ) Statistics::select_maxFD = maxFD;
 #endif // __U_STATISTICS__
 	unsigned int minFD = min( smaxFD, mmaxFD );
+
+	unsigned int tmasks = howmany( minFD, NFDBITS ); // number of chunks in current mask
 	unsigned int i;
-	unsigned int tmasks = howmany( minFD, NFDBITS );
-	// Scan each mask individually to prevent random accesses across multile pages.
+
+	// merge masks up to equal lengths
+	// scan each mask individually to prevent random accesses across multile pages
 	for ( i = 0; i < tmasks; i += 1 ) mRFDs.fds_bits[i] = srfds.fds_bits[i] | mrfds.fds_bits[i];
 	for ( i = 0; i < tmasks; i += 1 ) mWFDs.fds_bits[i] = swfds.fds_bits[i] | mwfds.fds_bits[i];
 	if ( efdsUsed )
 		for ( i = 0; i < tmasks; i += 1 ) mEFDs.fds_bits[i] = sefds.fds_bits[i] | mefds.fds_bits[i];
+
+	// complete merge by finishing longer mask
 	if ( smaxFD > mmaxFD ) {
 	    unsigned int stmasks = howmany( smaxFD, NFDBITS );
 	    for ( i = tmasks; i < stmasks; i += 1 ) mRFDs.fds_bits[i] = srfds.fds_bits[i];
@@ -221,7 +244,11 @@ namespace UPP {
     } // uNBIO::checkIOStart
 
 
-    int uNBIO::select( sigset_t *old_mask ) {
+    /******************* select **********************
+	Purpose: Wait until either one of the file dsecriptors becomes ready, or a signal is delivered
+	Effect: Call syscall "pselect" and pass master signal mask
+    **************************************************/
+    int uNBIO::select( sigset_t *orig_mask ) {
 	static timespec timeout_ = { 0, 0 };
 
 #ifdef __U_STATISTICS__
@@ -229,16 +256,27 @@ namespace UPP {
 	Statistics::select_pending = pending;
 #endif // __U_STATISTICS__
 	assert( THREAD_GETMEM( disableInt ) );
+	// maxFD : most significant file descriptor in master mask
+	// mRFDs, mWFDs : read/write masks
+	// mEFDs : optional exception mask, i.e., do not pass through system call unless necessary (very rare)
+	// selectBlock == true  => no ready tasks available so block processor and wait for I/O event(s) to unblock
+	//             == false => other tasks to execute so poll for descriptors that occurred while executing,
+	//                         polling is specified with a 0 time value
+	// orig_mask => original mask before masking SIGALRM/SIGURS1 to provide mutual exclusion, installing this mask
+	//              exits mutual exclusion
 	descriptors = ::pselect( maxFD, &mRFDs, &mWFDs,
 				 ! efdsUsed ? NULL : &mEFDs, // no exceptions ?
-				 selectBlock ? NULL : &timeout_, old_mask ); // poll or block ?
-	IOPollerPid = (uPid_t)-1;
+				 selectBlock ? NULL : &timeout_, orig_mask ); // poll or block ?
+	IOPollerPid = (uPid_t)-1;			// reset IOPoller
 	return errno;
     } // uNBIO::select
 
-
+    /******************* pollIO *********************
+	Purpose: Perform pollIO actions
+	Effect:
+    **************************************************/
     bool uNBIO::pollIO( NBIOnode &node ) {
-	int terrno;
+	int terrno;					// temporary errno
 
 	// Note, select occurs outside of the mutex members of NBIO monitor, so that other tasks can enter the
 	// monitor and register their interest in other IO events.
@@ -251,44 +289,50 @@ namespace UPP {
 
 	THREAD_GETMEM( This )->disableInterrupts();
 
+	// disable context switch
 	if ( uThisProcessor().getPreemption() != 0 ) {	// optimize out UNIX call if possible
-	    uThisProcessor().setContextSwitchEvent( 0 ); // turn off preemption or it keeps waking the UNIX processor
+	    uThisProcessor().setContextSwitchEvent( 0 ); // turn off preemption for virtual processor to prevent waking UNIX processor
 	} // if
 
-	// Check the ready queue to make sure that no task managed to slip onto the queue since the processor last checked.
-
+	// prevent external tasks (other clusters) from scheduling onto this ready queue
 	uThisCluster().readyIdleTaskLock.acquire();
 
-	selectBlock = false;				// assume polling
+	selectBlock = false;				// default is polling
 
-	// Note, the entry queue is checked for waiting I/O tasks, as well as the ready queue.
-
+	// Check processor private and public ready queues, as well as the uNBIO monitor entry-queue to make sure no
+	// task managed to slip onto the queues since starting the mutual exclusion.
 	if ( ! uThisCluster().readyQueueEmpty() || ! uThisProcessor().external.empty() || ! uEntryList.empty() ) {
+	    // tasks slipped through, so release mutual exclusion and allow tasks to execute after I/O polling.
 	    uThisCluster().readyIdleTaskLock.release();
-	    terrno = select( NULL );
+	    terrno = select( NULL );			// poll for descriptors
 	} else {
-	    // Block any SIGALRM/SIGUSR1 signals from arriving.
+	    // Block any SIGALRM/SIGUSR1 signals from external sources, i.e., the system processor performing
+	    // time-slicing.
 	    sigset_t new_mask, old_mask;
-	    sigemptyset( &new_mask );
+	    sigemptyset( &new_mask );			// clear mask and block SIGALRM/SIGUSR1 interrupts
 	    sigemptyset( &old_mask );
 	    sigaddset( &new_mask, SIGALRM );
 	    sigaddset( &new_mask, SIGUSR1 );
+	    // race to disable interupt and deliver interrupt
 	    if ( sigprocmask( SIG_BLOCK, &new_mask, &old_mask ) == -1 ) {
 		uAbort( "internal error, sigprocmask" );
 	    } // if
 
+	    // check if any interrupt occured before interrupts disabled (i.e., interrupt won race)
 	    if ( ! THREAD_GETMEM( RFinprogress ) && THREAD_GETMEM( RFpending ) ) { // need to start roll forward ?
+		// interrupt slipped through, so release mutual exclusion, reset the signal mask, and allow tasks to
+		// execute after I/O polling.
 		uThisCluster().readyIdleTaskLock.release();
 		if ( sigprocmask( SIG_SETMASK, &old_mask, NULL ) == -1 ) {
 		    uAbort( "internal error, sigprocmask" );
 		} // if
-		terrno = select( NULL );
+		terrno = select( NULL );		// poll for descriptors
 	    } else {
 		// Tasks migrating to a cluster wake a processor. When there is more than one processor on a cluster, do
 		// not signal the one blocked on select (by not putting it on the idle list), otherwise there can be a
 		// large number of unnecessary EINTR restarts for the select.
 
-		if ( uThisCluster().getProcessors() == 1 )
+		if ( uThisCluster().getProcessors() == 1 ) // must go on idle queue if only process
 		    uThisCluster().makeProcessorIdle( uThisProcessor() );
 		uThisCluster().readyIdleTaskLock.release();
 
@@ -310,6 +354,7 @@ namespace UPP {
 		} // if
 #endif // ! __U_MULTI__
 
+		// select unblocked because of SIGALRM
 		if ( timeoutOccurred ) selectBlock = false;
 
 		terrno = select( &old_mask );

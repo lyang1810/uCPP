@@ -1668,152 +1668,10 @@ typedef std::list<token_t *> tokenlist;
 static bool exception_declaration( attribute_t &attribute, bound_t &bound );
 static bool bound_exception_declaration( bound_t &bound );
 
-
-static bool resume_handler( symbol_t *symbol, int resume_clauses, token_t *&resume_any ) {
-    token_t *back = ahead;
-    token_t *befparn;
-    token_t *startE;
-    token_t *startH = NULL;
-    token_t *endH = NULL;
-    char temp_name[20];
-
-    // storing values inside a uHandler struct
-    befparn = ahead;
-    if ( match( LA ) ) {
-	sprintf( temp_name, "uHandler%d", resume_clauses );
-	startE = ahead;
-	token_t *dot = NULL;
-	bool dotdotdot = match( DOT_DOT_DOT );
-	if ( ! dotdotdot ) {				// resume-any ?
-	    for ( ;; ) {
-		if ( check( '.' ) ) {			// dot means bound resumption
-		    if ( ahead->prev_parse_token() == befparn ) { // better error handling for try <.Err>
-			goto fini;
-		    } // if
-		    dot = ahead;			// store object address in Handler
-		    scan();
-		    continue;
-		} // if
-		if ( eof() ) goto fini;
-		if ( check( ';' ) ) goto fini;
-		if ( check( LC ) ) goto fini;
-		if ( match( LA ) && ! match_closing( LA, RA ) ) goto fini;
-		if ( check( RA ) ) break;
-		if ( check( ',' ) ) break;
-		scan();
-	    } // for
-	} // if
-	if ( startE == ahead ) goto fini;
-	if ( match( ',' ) ) {
-	    if ( dotdotdot ) {				// resume-any ?
-		gen_code( befparn, "uAnyHandler" );
-		token_t *temp;				// carefully delete over startE etc.
-		temp = ahead->prev_parse_token();
-		temp->remove_token();			// remove ,
-		delete temp;
-		temp = ahead->prev_parse_token();
-		temp->remove_token();			// remove ...
-		delete temp;
-	    } else {
-		gen_code( befparn, "uRoutineHandler" );
-	    } // if
-	    gen_code( ahead, "__typeof__ (" );
-	    startH = ahead;
-	    for ( ;; ) {
-	      if ( eof() ) goto fini;
-	      if ( check( ';' ) ) goto fini;
-	      if ( check( LC ) ) goto fini;
-	      if ( match( LA ) && ! match_closing( LA, RA ) ) goto fini;
-	      if ( check( RA ) ) break;
-		scan();
-	    } // for
-	    if ( startH == ahead ) goto fini;
-	    endH = ahead->prev_parse_token();		// token before '>'
-	    gen_code( ahead, ")" );
-	    match( RA );				// match closing '>'
-	    gen_code( ahead, temp_name );
-	} else {
-	    match( RA );				// match closing '>'
-	    if ( dotdotdot ) {				// resume-any ?
-		gen_code( befparn, "uAnyNullHandler" );
-		token_t *temp;				// carefully delete over startE etc.
-		do {
-		    temp = ahead->prev_parse_token();
-		    temp->remove_token();
-		    delete temp;
-		} while ( temp != befparn );
-		befparn = ahead->prev_parse_token();    // reset befparn since we deleted it but need it later on for resume_any
-	    } else {
-		gen_code( befparn, "uNullHandler" );
-	    } // if
-	    gen_code( ahead, temp_name );
-	} // if
-	gen_code( ahead, "(" );
-	if ( dot ) {					// bound exception ?
-	    gen_code( ahead, "& (" );
-	    move_tokens( ahead, startE, dot );
-	    dot->remove_token();			// remove the dot
-	    delete dot;
-	    gen_code( ahead, ")" );
-	} else {
-	    gen_code( ahead, "( void * ) 0" );
-	} // if
-	if ( startH != NULL ) {				// handler ?
-	    gen_code( ahead, "," );
-	    token_t *next;
-	    for ( token_t *p = startH;; p = next ) {
-		next = p->next_parse_token();
-		gen_code( ahead, p->hash->text );
-	      if ( p == endH ) break;
-	    } // for
-	} // if
-	gen_code( ahead, ") ;" );
-	if ( dotdotdot ) {
-	    resume_any = befparn;			// remember location of resume_any block
-	} else {
-	    resume_any = NULL;
-	} // if
-	return true;
-      fini:
-	gen_error( befparn, "incorrectly formed resume clause." );
-    } // if
-
-    ahead = back; return false;
-} // resume_handler
-
-
-static unsigned int handlerNames = 0;			// unique handler names
-
-static void templateCatchResume( symbol_t *symbol, token_t *startTry ) {
-    table_t *parms = symbol->data->attribute.plate;
-    if ( parms != NULL ) {				// template parameters ?
-	gen_code( startTry, "<" );
-	// template parameter names are in reverse order (stack not queue)
-	token_t *backwards = startTry;
-	for ( local_t *l = parms->endT;; l = l->link ) {
-	    //printf( "-> %s ", l->kind.sym->hash->text );
-	    gen_code( backwards, l->kind.sym->hash->text );
-	    backwards = backwards->aft;
-	  if ( l == parms->startT ) break;
-	    gen_code( backwards, "," );			// separator
-	    backwards = backwards->aft;
-	} // for
-	gen_code( startTry, ">" );
-    } // if
-} // templateCatchResume
-
-
-static bool catchResume_parameter_list( attribute_t &attribute );
-
 static bool catchResume_body( symbol_t *symbol, attribute_t &attribute, token_t *back, token_t *startTry, unsigned int handler, bound_t &bound, bool dotdotdot = false ) {
-    char buffer[128 + ( symbol->data->key == MEMBER ? strlen( symbol->data->found->symbol->hash->text ) : 0 )];
-    attribute_t attribute2;
+    char buffer[128];
 
-    token_t *startparms = ahead;
-    bool functor_args = catchResume_parameter_list( attribute2 ); // optional catchresume arguments
-    token_t *endparms = ahead;
-
-    // line-number directive for start of hoisted routine in original location
+    // line-number directive for the hoisted _CatchResume clause
 
     char linedir[32 + strlen( file )];
     sprintf( linedir, "# %d \"%s\"\n", line, file );
@@ -1823,97 +1681,16 @@ static bool catchResume_body( symbol_t *symbol, attribute_t &attribute, token_t 
     uassert( symbol->data->key == ROUTINE || symbol->data->key == MEMBER );
     uassert( symbol->data->attribute.startCR != NULL );
 
-    // hoisted functor
-
-    if ( symbol->data->key == MEMBER && symbol->data->found->symbol->data->attribute.plate != NULL // template class ?
-	 && symbol->data->attribute.nestedqual ) {	// not inlined definition ?
-	copy_tokens( symbol->data->attribute.startCR, symbol->data->found->symbol->data->attribute.startT, symbol->data->found->symbol->data->attribute.endT );
-    } // if
-    if ( symbol->data->attribute.plate != NULL ) {	// template routine ?
-	if ( symbol->data->attribute.startMRP != symbol->data->attribute.startCR ) {
-	    copy_tokens( symbol->data->attribute.startMRP, symbol->data->attribute.startT, symbol->data->attribute.endT ); // before prototype
-	} // if
-	copy_tokens( symbol->data->attribute.startCR, symbol->data->attribute.startT, symbol->data->attribute.endT ); // before implementation
-    } // if
-    if ( symbol->data->attribute.startMRP != symbol->data->attribute.startCR ) {
-	gen_code( symbol->data->attribute.startMRP, "struct" ); // before prototype
-    } // if
-    gen_code( symbol->data->attribute.startCR, "struct" ); // before implementation
-    if ( symbol->data->key == MEMBER && symbol->data->attribute.nestedqual) { // not inlined definition ?
- 	gen_code( symbol->data->attribute.startCR, symbol->data->found->symbol->hash->text );
-	if ( symbol->data->found->symbol->data->attribute.plate != NULL ) { // template class ?
-	    templateCatchResume( symbol->data->found->symbol, symbol->data->attribute.startCR );
-	} // if
-	gen_code( symbol->data->attribute.startCR, "::" );
-    } // if
-    if ( symbol->data->attribute.startMRP != symbol->data->attribute.startCR ) {
-	sprintf( buffer, "uHandlerRtn%d_f ;", handlerNames );
-	gen_code( symbol->data->attribute.startMRP, buffer );
-    } // if
-
-    sprintf( buffer, "uHandlerRtn%d_f {", handlerNames ); // start functor
-    gen_code( symbol->data->attribute.startCR, buffer );
-    for ( token_t *p = startparms; p->right != NULL; p = p->right ) { // copy tokens
-	gen_code( p->left, '&' );
-	copy_tokens( symbol->data->attribute.startCR, p->fore, p->right );
-	gen_code( symbol->data->attribute.startCR, ';' );
-    } // for
-
-    gen_code( symbol->data->attribute.startCR, "void operator ( )" );
-    gen_code( symbol->data->attribute.startCR, '\n' );
-    gen_code( symbol->data->attribute.startCR, linedir, '#' );
-    move_tokens_all( symbol->data->attribute.startCR, back, ahead );
-
-    if ( startparms != endparms ) {			// no functor arguments ?
-	sprintf( buffer, "uHandlerRtn%d_f", handlerNames ); // start constructor
-	gen_code( symbol->data->attribute.startCR, buffer );
-	move_tokens( symbol->data->attribute.startCR, startparms, endparms );
-	if ( functor_args ) {				// non-empty functor arguments ?
-	    gen_code( symbol->data->attribute.startCR, ":" );
-
-	    for ( token_t *p = startparms; p->right != NULL; p = p->right ) { // copy tokens
-		gen_code( symbol->data->attribute.startCR, p->left->hash->text );
-		gen_code( symbol->data->attribute.startCR, "(" );
-		gen_code( symbol->data->attribute.startCR, p->left->hash->text );
-		gen_code( symbol->data->attribute.startCR, ")" );
-		if ( p->right->right != NULL ) {		// separator
-		    gen_code( symbol->data->attribute.startCR, "," );
-		} // if
-	    } // for
-	} // if
-	gen_code( symbol->data->attribute.startCR, "{ }" ); // end constructor
-    } // if
-    gen_code( symbol->data->attribute.startCR, "} ;" ); // end functor
-
     // resumption table entry
+    if ( dotdotdot ) {
+        gen_code( startTry, "uRoutineHandlerAny" );
+    } else {
+        gen_code( startTry, "uRoutineHandler <" );
+        copy_tokens( startTry, bound.exbegin, bound.idleft );
+        gen_code( startTry, ">" );
+    }
 
-    sprintf( buffer, "uHandlerRtn%d_f", handlerNames );
-    gen_code( startTry, buffer );
-    templateCatchResume( symbol, startTry );
-    sprintf( buffer, "uHandlerRtn%d_v", handlerNames );
-    gen_code( startTry, buffer );
-    table_t *parms = attribute2.plate;
-    if ( parms != NULL ) {				// template parameters ?
-	gen_code( startTry, "(" );
-	// template parameter names are in reverse order (stack not queue)
-	token_t *backwards = startTry;
-	for ( local_t *l = parms->local;; l = l->link ) {
-	    //printf( "-> %s ", l->kind.sym->hash->text );
-	    gen_code( backwards, l->kind.sym->hash->text );
-	    backwards = backwards->aft;
-	  if ( l->link == NULL ) break;
-	    gen_code( backwards, "," );			// separator
-	    backwards = backwards->aft;
-	} // for
-	gen_code( startTry, ")" );
-    } // if
-    gen_code( startTry, ";" );
-
-    sprintf( buffer, "%s%s <", "uRoutineHandler", dotdotdot ? "Any" : "" );
-    gen_code( startTry, buffer );
-    copy_tokens( startTry, bound.exbegin, bound.idleft );
-
-    sprintf( buffer, "%s__typeof__ ( uHandlerRtn%d_v ) > uHandler%d (", dotdotdot ? "" : ", ", handlerNames, handler );
+    sprintf( buffer, "uHandler%d (", handler );         // begin handler constructor
     gen_code( startTry, buffer );
 
     if ( bound.oleft != NULL ) {			// bound object ?
@@ -1924,11 +1701,14 @@ static bool catchResume_body( symbol_t *symbol, attribute_t &attribute, token_t 
 	gen_code( startTry, ") ," );
     } // if
 
-    sprintf( buffer, "uHandlerRtn%d_v", handlerNames );
-    gen_code( startTry, buffer );
-    gen_code( startTry, ") ;" );
 
-    handlerNames += 1;
+    // hoist _CatchResume clause into a lambda
+    gen_code( startTry, "[&]" );
+    gen_code( startTry, '\n' );
+    gen_code( startTry, linedir, '#' );
+    move_tokens_all( startTry, back, ahead );
+
+    gen_code( startTry, ") ;" );                        // end handler constructor
 
     return true;
 } // catchResume_body
@@ -2102,6 +1882,39 @@ static void register_extype( symbol_t *sym, symbolset &parents, symbolset &extyp
 } // register_extype
 
 
+static bool finally_clause( symbol_t *symbol, token_t *start ) {
+    token_t *back = ahead;
+
+    if ( match( FINALLY ) ) {
+        token_t *prev = ahead;
+
+        // line-number directive for the hoisted finally clause
+
+        char linedir[32 + strlen( file )];
+        sprintf( linedir, "# %d \"%s\"\n", line, file );
+
+      if ( ! compound_statement( symbol, NULL, 0 ) ) return false; // parse finally body
+
+        uassert( symbol->data->key == ROUTINE || symbol->data->key == MEMBER );
+        uassert( symbol->data->attribute.startCR != NULL );
+
+        // hoist finally clause into a lambda
+
+        gen_code( start, "uEHM :: uFinallyHandler uFinallyHandler( [&]" );
+        gen_code( start, '\n' );
+        gen_code( start, linedir, '#' );
+        move_tokens_all( start, prev, ahead );
+        gen_code( start, ") ;" );
+
+        back->remove_token();  // remove the "_Finally" token
+        return true;
+    } // if
+
+    ahead = back;
+    return false;
+} // finally_clause
+
+
 static bool try_block( symbol_t *symbol ) {
     token_t *back = ahead;
     token_t *start, *prefix;
@@ -2111,38 +1924,18 @@ static bool try_block( symbol_t *symbol ) {
 
     start = ahead;
     if ( match( TRY ) ) {
-	token_t *resume_any, *prev = NULL;
-	unsigned int resume_clauses = 0, catch_clauses = 0;
+        char linedir[32 + strlen( file )];
+        unsigned int resume_clauses = 0, catch_clauses = 0, finally_clauses = 0;
 
-	gen_code( start, "{ bool uOrigRethrow = false ;" ); // bracket try block with flag declaration
+	token_t *blockLC = gen_code( start, "{");
 
-	if ( resume_handler( symbol, resume_clauses, resume_any ) ) {
-	    gen_warning( ahead, "try \"<>\" style resumption clause is deprecated. Use \"_CatchResume\" clause at end of try block." );
-	    gen_code( start->next_parse_token(), "{" );
-	    do {
-		resume_clauses += 1;
-		if ( prev != NULL ) {
-		    gen_error( prev, "'...' resumption handler must be the last handler for its try block." );
-		} // if
-		prev = resume_any;
-	    } while ( resume_handler( symbol, resume_clauses, resume_any ) );
-	    gen_code( ahead, "uEHM :: uHandlerBase * uHandlerTable [ ] = {" );
-	    char buffer[20];
-	    for ( unsigned int i = 0; i < resume_clauses; i += 1 ) {
-		sprintf( buffer, "& uHandler%d ,", i );
-		gen_code( ahead, buffer );
-	    } // for
-	    gen_code( ahead, "} ; uEHM :: uResumptionHandlers uResumptionNode ( uHandlerTable ," );
-	    sprintf( buffer, "%d", resume_clauses );
-	    gen_code( ahead, buffer );
-	    gen_code( ahead, ") ;" );
-	} // if
+	// line-number directive for the try clause
 
-	prefix = ahead;
+        sprintf( linedir, "# %d \"%s\"\n", line, file );
+        prefix = gen_code( ahead, '\n' );
+        gen_code( ahead, linedir, '#' );
+
 	if ( compound_statement( symbol, NULL, 0 ) ) {
-	    if ( resume_clauses > 0 ) {
-	        gen_code( ahead, "}" );
-	    } // if
 	    token_t *prev;
 	    bool bound;					// is catch clause bound ?
 	    prev = ahead;				// location before catch clause
@@ -2167,17 +1960,6 @@ static bool try_block( symbol_t *symbol ) {
 		    prev = ahead;
 		} // for
 
-		// line-number directive for start of class/routine containing _CatchResume
-
-		char *filenameCR = NULL;
-		unsigned int dummy;
-		parse_directive( symbol->data->attribute.fileCR->hash->text, filenameCR, dummy );
-		char linedir[32 + strlen( filenameCR )];
-		sprintf( linedir, "# %d \"%s\"\n", symbol->data->attribute.lineCR, filenameCR );
-		gen_code( symbol->data->attribute.startCR, '\n' );
-		gen_code( symbol->data->attribute.startCR, linedir, '#' );
-		delete [] filenameCR;
-
 		// complete resumption table entry
 
 		gen_code( prefix, "uEHM :: uHandlerBase * uHandlerTable [ ] = {" );
@@ -2191,11 +1973,12 @@ static bool try_block( symbol_t *symbol ) {
 		gen_code( prefix, ") ;" );
 		gen_code( ahead, "}" );
 
-		// line-number directive for end of _CatchResume clauses of a try-block, which have been all been hoisted
-
-		sprintf( linedir, "# %d \"%s\"\n", line, file );
-		gen_code( ahead, '\n' );
-		gen_code( ahead, linedir, '#' );
+                // line-number directive for catch clauses after _CatchResume clauses in a try-block
+                if ( check( CATCH ) ) {
+                    sprintf( linedir, "# %d \"%s\"\n", line, file );
+                    gen_code( ahead, '\n' );
+                    gen_code( ahead, linedir, '#' );
+                }
 	    } // if
 
 	    while ( catch_clause( symbol, bound, optimized, para_name, exception_type, try_catches, if_rethrow ) ) {
@@ -2229,18 +2012,26 @@ static bool try_block( symbol_t *symbol ) {
 		try_catches.pop_front();
 	    } // while
 
-	    // If no catch clause for a resume try block, remove the "try" keyword before the compound statement.
-	    if ( resume_clauses != 0 && catch_clauses == 0 ) {
-		start->remove_token();
-	    } // if
+            gen_code( ahead, "}" );
 
 	    if ( split ) {
-		gen_code( ahead, "}" );			// close uOrigRethrow block
-	    } else {
-		t = start->prev_parse_token();          // if we don't split, we don't need the "bool uOrigRethrow = false"
-		t->remove_token();
-		delete t;
+	        gen_code( blockLC->fore, "bool uOrigRethrow = false ;" ); // if we have splits, bracket try block with flag declaration
 	    } // if
+
+	    if ( finally_clause ( symbol, blockLC->fore ) ) {
+                finally_clauses = 1;
+            } // if
+
+            // line-number directive for code after the try-block
+	    sprintf( linedir, "# %d \"%s\"\n", line, file );
+	    gen_code( ahead, '\n' );
+	    gen_code( ahead, linedir, '#' );
+
+	    // If no catch clause for a try block, remove the "try" keyword before the compound statement.
+	    if ( catch_clauses == 0 && ( resume_clauses > 0 || finally_clauses > 0 ) ) {
+	        start->remove_token();
+	    } // if
+
 	    return true;
 	} // if
     } // if
@@ -3068,59 +2859,6 @@ static bool template_parameter_list( attribute_t &attribute ) {
 
     return true;
 } // template_parameter_list
-
-
-static bool catchResume_parameter( attribute_t &attribute ) {
-    token_t *back = ahead;
-
-    if ( specifier_list( attribute ) ) {
- 	declarator( attribute );
-	if ( attribute.startI != NULL ) {		// named parameter ?
-	    uassert( attribute.startI->symbol != NULL );
-	    // if reference declaration, remove reference, as it is added later
-	    token_t *prev;
-	    for ( prev = attribute.startI->prev_parse_token(); prev->value == '('; prev = prev->prev_parse_token() );
-	    if ( prev->value == '&' ) prev->remove_token();
-	    if ( attribute.startI->symbol->data->found != focus ) {
-		attribute.plate->insert_table( attribute.startI->symbol ); // insert the symbol into the template symbol
-	    } // if
-	} // if
- 	return true;
-    } // if
-
-    ahead = back; return false;
-} // catchResume_parameter
-
-
-static bool catchResume_parameter_list( attribute_t &attribute ) {
-    token_t *back = ahead;
-
-    if ( match( LP ) ) {
-	token_t *prev = back;				//  LP
-
-	if ( match ( RP ) ) {				// empty parameter list ?
-	    return false;
-	} // if
-
-	if ( attribute.plate == NULL ) {
-	    attribute.plate = new table_t( NULL );
-	} // if
-
-	if ( catchResume_parameter( attribute ) ) {
-	    while ( match( ',' ) ) {
-		prev->left = attribute.startI;
-		prev = prev->right = ahead->prev_parse_token(); // comma
-		catchResume_parameter( attribute );
-	    } // while
-	    prev->left = attribute.startI;
-	    prev->right = ahead;			// RP
-	} // if
-	if ( match( RP ) ) return true;
-    } // if
-
-    ahead = back; return false;
-} // catchResume_parameter_list
-
 
 static bool task_parameter_list( attribute_t &attribute ) {
     token_t *back = ahead;

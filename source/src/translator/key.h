@@ -172,6 +172,7 @@ enum key_value_t {
     UELSE,
     ENABLE,
     EVENT,
+    FINALLY,
     MUTEX,
     NOMUTEX,
     PTASK,

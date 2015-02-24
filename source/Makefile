@@ -61,7 +61,7 @@ STATISTICS ?= TRUE
 
 ## Define if the kernel is build with C++11 (-std=): c++0x, c++11, c++1y
 
-CPP11 ?=
+CPP11 ?= c++0x
 
 ########################### END OF THINGS TO CHANGE ###########################
 

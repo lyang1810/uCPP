@@ -45,18 +45,20 @@ class uBaseEvent {
     friend class uEHM;
   public:
     enum RaiseKind { ThrowRaise, ResumeRaise };
+    enum RaiseType { ValueRaise, PointerRaise };
   protected:
     const void *staticallyBoundObject;			// bound object for matching, set at raise
     const uBaseCoroutine *src;				// source execution for async raise, set at raise
     char srcName[uEHMMaxName];				//    and this field, too
     char msg[uEHMMaxMsg];				// message to print if exception uncaught
-    RaiseKind raiseKind;				// how the exception is raised
+    RaiseKind raiseKind;				// how the exception is raised, throw or resume
+    RaiseType raiseType;                                // how the exception is raised, by value or by pointer
 
     uBaseEvent( const char *const msg = "" ) { src = NULL; setMsg( msg ); }
     void setSrc( uBaseCoroutine &coroutine );
     const std::type_info *getEventType() const { return &typeid( *this ); };
     void setMsg( const char *const msg );
-    virtual void stackThrow() const = 0;		// translator generated => object specific
+    virtual void stackThrow() = 0;		// translator generated => object specific
   public:
     virtual ~uBaseEvent();
 
@@ -64,13 +66,13 @@ class uBaseEvent {
     const uBaseCoroutine &source() const { return *src; }
     const char *sourceName() const { return src != NULL ? srcName : "*unknown*"; }
     RaiseKind getRaiseKind() const { return raiseKind; }
+    RaiseType getRaiseType() const { return raiseType; }
     void reraise();
     virtual uBaseEvent *duplicate() const = 0;		// translator generated => object specific
-    virtual void defaultTerminate() const;
-    virtual void defaultResume() const;
+    virtual void defaultTerminate();
+    virtual void defaultResume();
 
     // These members should be private but cannot be because they are referenced from user code.
-
     const void *getOriginalThrower() const { return staticallyBoundObject; }
     uBaseEvent &setOriginalThrower( void *p );
 
@@ -123,6 +125,16 @@ class uEHM {
     static void Resume( uBaseEvent &ex, uBaseCoroutine &target ) { asyncToss( ex, target, uBaseEvent::ResumeRaise ); }
     static void Resume( uBaseCoroutine &target ) { asyncReToss( target, uBaseEvent::ResumeRaise ); } // asynchronous reresume
     static void ReResume();
+
+    template< typename T >
+    static T *getPtrRaise( const T &event ) { const_cast<T&>( event ).raiseType = event.ValueRaise; return &const_cast<T&>( event ); }
+    template< typename T >
+    static T *getPtrRaise( T *event ) { event->raiseType = event->PointerRaise; return event; }
+
+    template< typename T >
+    static T *getPtrHandle( const T &event ) { return &const_cast<T&>( event ); }
+    template< typename T >
+    static T *getPtrHandle( T *event ) { return event; }
 
     static bool pollCheck();
     static int poll();

@@ -1776,7 +1776,7 @@ static bool catch_clause( symbol_t *symbol, bool &bflag, bool &optimized, hash_t
 		    gen_code( prefix, "{ ");
 		    gen_code( prefix, "if ( uOrigRethrow ) throw ;");
 		    if_rethrow.push_front( prefix->prev_parse_token() ); // possible later deletion if this is the innermost try block
-		    gen_code( prefix, "const void * _U_bindingVal = (" );
+		    gen_code( prefix, "const void * _U_bindingVal = uEHM :: getPtrHandle (" );
 		    // look backwards for exception parameter name
 		    for ( p = bound.idright; p != bound.exbegin; p = p->prev_parse_token() ) {
 			if ( p->value == IDENTIFIER || p->value == TYPE ) {
@@ -1785,7 +1785,7 @@ static bool catch_clause( symbol_t *symbol, bool &bflag, bool &optimized, hash_t
 			    break;
 			} // exit
 		    } // for
-		    gen_code( prefix, ") . getOriginalThrower ( ) ;" ); // >= & ( );
+		    gen_code( prefix, ") -> getOriginalThrower ( ) ;" ); // >= & ( );
 		    token_t *realend = prefix->prev_parse_token(); // remember for optimization part
 		    gen_code( prefix, "if ( _U_bindingVal == & (" );
 		    // Move the tokens for the bound object expression from the catch clause argument to the if
@@ -2097,12 +2097,12 @@ static bool raise_expression( key_value_t kind, symbol_t *symbol ) {
 		    sprintf( helpText, "uEHM :: Re%s ( )", kindstr );
 		    gen_code( prefix, helpText );
 		} else {
-		    gen_code( prefix, "( ( void ) 1 ,"); // hack because of gcc parser bug: class fred; (fred()).foo() doesn't compile
+		    gen_code( prefix, "uEHM :: getPtrRaise( ( ( void ) 1 ,"); // hack because of gcc parser bug: class fred; (fred()).foo() doesn't compile
 		    prefix = prefix->prev_parse_token();
 		    if ( symbol->data->found->symbol && ! symbol->data->attribute.dclqual.qual.STATIC ) {
-			gen_code( suffix, ") . setOriginalThrower( this ) ." );
+			gen_code( suffix, ") ) -> setOriginalThrower( this ) ." );
 		    } else {
-			gen_code( suffix, ") . setOriginalThrower( ( void * ) 0 ) ." );
+			gen_code( suffix, ") ) -> setOriginalThrower( ( void * ) 0 ) ." );
 		    } // if
 		    sprintf( helpText, "%s ( )", kindstr );
 		    gen_code( suffix, helpText );

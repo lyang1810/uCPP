@@ -611,7 +611,7 @@ void gen_class_suffix( token_t *before, symbol_t *symbol ) {
 	gen_code( table->protected_area, "* duplicate ( ) const { return new" );
 	gen_hash( table->protected_area, symbol->hash );
 	gen_code( table->protected_area, "( * this ) ; }" );
-	gen_code( table->protected_area, "virtual void stackThrow ( ) const { throw * this ; }" );
+	gen_code( table->protected_area, "virtual void stackThrow ( ) { if ( raiseType == uBaseEvent::ValueRaise ) { throw * this ; } else {  throw this ; } }" );
     } // if
 
     // declare uSerialInstance *after* the mutex queues (uMutexList) because ~uSerial accesses these queues to check if

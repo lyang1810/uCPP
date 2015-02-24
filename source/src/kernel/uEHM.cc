@@ -185,11 +185,11 @@ uBaseEvent &uBaseEvent::setOriginalThrower( void *p ) {
     return *this;
 } // uBaseEvent::setOriginalThrower
 
-void uBaseEvent::defaultTerminate() const {
+void uBaseEvent::defaultTerminate() {
     // do nothing so per thread "terminate()" is called
 } // uBaseEvent::defaultTerminate
 
-void uBaseEvent::defaultResume() const {
+void uBaseEvent::defaultResume() {
     stackThrow();
     // CONTROL NEVER REACHES HERE!
     assert( false );
